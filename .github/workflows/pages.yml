@@ -1,1 +1,63 @@
+name: Milas Zeitreise veroeffentlichen
 
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Mila-Stimme sichern und Webseite online stellen
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Dateien laden
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - name: Python vorbereiten
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Alle 29 Mila-Aufnahmen herunterladen
+        run: |
+          mkdir -p tools
+          cp bootstrap_audio.py tools/bootstrap_audio.py
+          python tools/bootstrap_audio.py
+          test "$(find audio -maxdepth 1 -type f -name '*.mp3' | wc -l)" -eq 29
+
+      - name: Die MP3 dauerhaft in GitHub speichern
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add audio/*.mp3
+          if ! git diff --cached --quiet; then
+            git commit -m 'Store Milas 29 audio recordings permanently'
+            git push
+          fi
+
+      - name: GitHub Pages konfigurieren
+        uses: actions/configure-pages@v5
+
+      - name: Webseite fuer Pages vorbereiten
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - name: Webseite veroeffentlichen
+        id: deployment
+        uses: actions/deploy-pages@v4
